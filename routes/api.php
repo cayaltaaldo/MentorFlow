@@ -24,6 +24,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/tickets', [TicketController::class, 'index'])
         ->middleware('permission:tickets.view');
 
+    Route::post('/tickets', [TicketController::class, 'store'])
+        ->middleware('permission:tickets.create');
+
+    Route::get('/tickets/{ticket}', [TicketController::class, 'show'])
+        ->middleware('permission:tickets.view');
+
+    Route::put('/tickets/{ticket}', [TicketController::class, 'update'])
+        ->middleware('permission:tickets.update');
+
     Route::delete('/tickets/{ticket}', [TicketController::class, 'destroy'])
         ->middleware('permission:tickets.delete');
 
