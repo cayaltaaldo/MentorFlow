@@ -36,4 +36,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/tickets/{ticket}', [TicketController::class, 'destroy'])
         ->middleware('permission:tickets.delete');
 
-});
+    Route::patch('/tickets/{ticket}/status',[TicketController::class, 'changeStatus'])
+        ->middleware('permission:tickets.update');
+
+    Route::get('/tickets/{ticket}/history',[TicketController::class, 'history'])
+        ->middleware('permission:tickets.view');    
+    });
+

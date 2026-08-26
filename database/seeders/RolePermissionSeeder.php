@@ -20,20 +20,21 @@ class RolePermissionSeeder extends Seeder
         );
 
         $coordinator->permissions()->sync(
-            Permission::whereIn('name', [
-                'tickets.view',
-                'tickets.create',
-                'tickets.update',
-                'tickets.assign',
-                'tickets.close',
-                'users.view',
-                'workflows.view',
-                'workflows.create',
-                'workflows.update',
-                'reports.view',
-            ])->pluck('id')
-        );
-
+    Permission::whereIn('name', [
+        'tickets.view',
+        'tickets.view_all',
+        'tickets.create',
+        'tickets.update',
+        'tickets.update_all',
+        'tickets.assign',
+        'tickets.close',
+        'users.view',
+        'workflows.view',
+        'workflows.create',
+        'workflows.update',
+        'reports.view',
+    ])->pluck('id')
+);
         $agent->permissions()->sync(
             Permission::whereIn('name', [
                 'tickets.view',

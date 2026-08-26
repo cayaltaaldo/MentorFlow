@@ -9,6 +9,12 @@ use App\Models\Ticket;
 use App\Models\TicketStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
+use App\Http\Requests\ChangeTicketStatusRequest;
+use App\Services\TicketStatusService;
+use App\Services\TicketHistoryService;
+use App\Http\Resources\TicketHistoryResource;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class TicketController extends Controller
 {
@@ -56,7 +62,7 @@ class TicketController extends Controller
         return TicketResource::collection($tickets);
     }
 
-    public function store(StoreTicketRequest $request): TicketResource
+    public function store(StoreTicketRequest $request,TicketHistoryService $historyService): TicketResource 
     {
         $ticket = Ticket::create([
             'ticket_number' => 'MF-' . strtoupper(
@@ -95,49 +101,127 @@ class TicketController extends Controller
             'assignedUser',
         ]);
 
+        
+        $historyService->log(
+            $ticket,
+            $request->user(),
+            'created',
+            null,
+            null,
+            null,
+            'Ticket creado.'
+        );
         return new TicketResource($ticket);
     }
 
     public function show(Ticket $ticket): TicketResource
+{
+    Gate::authorize('view', $ticket);
+
+    $ticket->load([
+        'user',
+        'category',
+        'priority',
+        'status',
+        'assignedUser',
+    ]);
+
+    return new TicketResource($ticket);
+}
+
+    public function update( UpdateTicketRequest $request,Ticket $ticket,TicketHistoryService $historyService): TicketResource 
+    
     {
-        $ticket->load([
-            'user',
-            'category',
-            'priority',
-            'status',
-            'assignedUser',
-        ]);
+    Gate::authorize('update', $ticket);
 
-        return new TicketResource($ticket);
-    }
+    $changes = $request->validated();
 
-    public function update(
-        UpdateTicketRequest $request,
-        Ticket $ticket
-    ): TicketResource {
+    foreach ($changes as $field => $newValue) {
 
-        $ticket->update(
-            $request->validated()
+        $oldValue = $ticket->getAttribute($field);
+
+        if ((string) $oldValue === (string) $newValue) {
+            continue;
+        }
+
+        $ticket->setAttribute($field, $newValue);
+
+        $historyService->log(
+            $ticket,
+            $request->user(),
+            'updated',
+            $field,
+            $oldValue,
+            $newValue,
+            "Se actualizó el campo {$field}."
         );
-
-        $ticket->load([
-            'user',
-            'category',
-            'priority',
-            'status',
-            'assignedUser',
-        ]);
-
-        return new TicketResource($ticket);
     }
 
-    public function destroy(Ticket $ticket): JsonResponse
+    $ticket->save();
+
+    $ticket->load([
+        'user',
+        'category',
+        'priority',
+        'status',
+        'assignedUser',
+    ]);
+
+    return new TicketResource($ticket);
+}
+
+    public function destroy(Ticket $ticket,TicketHistoryService $historyService,Request $request): JsonResponse 
+    
     {
-        $ticket->delete();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Ticket eliminado correctamente.',
-        ]);
-    }
+    Gate::authorize('delete', $ticket);
+
+    $historyService->log(
+        $ticket,
+        $request->user(),
+        'deleted',
+        null,
+        null,
+        null,
+        'Ticket eliminado.'
+    );
+
+    $ticket->delete();
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Ticket eliminado correctamente.',
+    ]);
+}
+
+public function changeStatus(
+    ChangeTicketStatusRequest $request,
+    Ticket $ticket,
+    TicketStatusService $statusService,
+    TicketHistoryService $historyService
+): TicketResource {
+
+    Gate::authorize('update', $ticket);
+
+    $ticket = $statusService->changeStatus(
+        $ticket,
+        $request->status,
+        $request->user(),
+        $historyService
+    );
+
+    return new TicketResource($ticket);
+}
+
+public function history(Ticket $ticket): AnonymousResourceCollection
+{
+    Gate::authorize('delete', $ticket);
+
+    $history = $ticket->history()
+        ->with('user')
+        ->latest()
+        ->get();
+
+    return TicketHistoryResource::collection($history);
+}
 }

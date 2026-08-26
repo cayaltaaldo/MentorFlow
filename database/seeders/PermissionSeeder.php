@@ -15,6 +15,10 @@ class PermissionSeeder extends Seeder
                 'description' => 'Ver tickets',
             ],
             [
+                'name' => 'tickets.view_all',
+                'description' => 'Ver todos los tickets',
+            ],
+            [
                 'name' => 'tickets.create',
                 'description' => 'Crear tickets',
             ],
@@ -23,8 +27,16 @@ class PermissionSeeder extends Seeder
                 'description' => 'Actualizar tickets',
             ],
             [
+                'name' => 'tickets.update_all',
+                'description' => 'Actualizar todos los tickets',
+            ],
+            [
                 'name' => 'tickets.delete',
                 'description' => 'Eliminar tickets',
+            ],
+            [
+                'name' => 'tickets.delete_all',
+                'description' => 'Eliminar todos los tickets',
             ],
             [
                 'name' => 'tickets.assign',
@@ -73,7 +85,10 @@ class PermissionSeeder extends Seeder
         ];
 
         foreach ($permissions as $permission) {
-            Permission::create($permission);
+            Permission::updateOrCreate(
+                ['name' => $permission['name']],
+                ['description' => $permission['description']]
+            );
         }
     }
 }

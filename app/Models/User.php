@@ -44,6 +44,16 @@ class User extends Authenticatable
         ->exists();
 }
 
+/**
+ * Determina si el usuario tiene un rol específico.
+ */
+public function hasRole(string $role): bool
+{
+    return $this->roles()
+        ->where('name', $role)
+        ->exists();
+}
+
     /**
      * Tickets creados por el usuario.
      */
