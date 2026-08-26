@@ -2,69 +2,75 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ChangeTicketStatusRequest;
 use App\Http\Requests\StoreTicketRequest;
+use App\Http\Requests\TicketIndexRequest;
 use App\Http\Requests\UpdateTicketRequest;
+
+use App\Http\Resources\TicketHistoryResource;
 use App\Http\Resources\TicketResource;
+
 use App\Models\Ticket;
+use App\Models\TicketPriority;
 use App\Models\TicketStatus;
+
+use App\Services\TicketHistoryService;
+use App\Services\TicketQueryService;
+use App\Services\TicketSlaService;
+use App\Services\TicketStatusService;
+
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Gate;
-use App\Http\Requests\ChangeTicketStatusRequest;
-use App\Services\TicketStatusService;
-use App\Services\TicketHistoryService;
-use App\Http\Resources\TicketHistoryResource;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Gate;
 
 class TicketController extends Controller
 {
-    public function index(Request $request)
-    {
-        $query = Ticket::with([
-            'user',
-            'category',
-            'priority',
-            'status',
-            'assignedUser',
-        ]);
-
-        if ($request->filled('status_id')) {
-            $query->where('status_id', $request->integer('status_id'));
-        }
-
-        if ($request->filled('priority_id')) {
-            $query->where('priority_id', $request->integer('priority_id'));
-        }
-
-        if ($request->filled('category_id')) {
-            $query->where('category_id', $request->integer('category_id'));
-        }
-
-        if ($request->filled('assigned_to')) {
-            $query->where('assigned_to', $request->integer('assigned_to'));
-        }
-
-        if ($request->filled('search')) {
-            $search = $request->string('search');
-
-            $query->where(function ($q) use ($search) {
-                $q->where('ticket_number', 'like', "%{$search}%")
-                    ->orWhere('title', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%");
-            });
-        }
-
-        $tickets = $query
-            ->latest()
-            ->paginate(15)
-            ->withQueryString();
+    /**
+     * Listar y filtrar tickets.
+     */
+    public function index(
+        TicketIndexRequest $request,
+        TicketQueryService $queryService
+    ) {
+        $tickets = $queryService->search(
+            $request->validated()
+        );
 
         return TicketResource::collection($tickets);
     }
 
-    public function store(StoreTicketRequest $request,TicketHistoryService $historyService): TicketResource 
-    {
+    /**
+     * Crear un nuevo ticket.
+     */
+    public function store(
+        StoreTicketRequest $request,
+        TicketHistoryService $historyService,
+        TicketSlaService $slaService
+    ): TicketResource {
+
+        $priority = TicketPriority::findOrFail(
+            $request->priority_id
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Calcular SLA
+        |--------------------------------------------------------------------------
+        */
+
+        $dueAt = $slaService->calculateDueAt(
+            $priority
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Crear ticket
+        |--------------------------------------------------------------------------
+        */
+
         $ticket = Ticket::create([
+
             'ticket_number' => 'MF-' . strtoupper(
                 fake()->unique()->numerify('######')
             ),
@@ -86,12 +92,18 @@ class TicketController extends Controller
 
             'description' => $request->description,
 
-            'due_at' => null,
+            'due_at' => $dueAt,
 
             'resolved_at' => null,
 
             'closed_at' => null,
         ]);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Cargar relaciones
+        |--------------------------------------------------------------------------
+        */
 
         $ticket->load([
             'user',
@@ -101,7 +113,12 @@ class TicketController extends Controller
             'assignedUser',
         ]);
 
-        
+        /*
+        |--------------------------------------------------------------------------
+        | Registrar historial
+        |--------------------------------------------------------------------------
+        */
+
         $historyService->log(
             $ticket,
             $request->user(),
@@ -111,117 +128,194 @@ class TicketController extends Controller
             null,
             'Ticket creado.'
         );
+
         return new TicketResource($ticket);
     }
 
-    public function show(Ticket $ticket): TicketResource
-{
-    Gate::authorize('view', $ticket);
+    /**
+     * Mostrar un ticket específico.
+     */
+    public function show(
+        Ticket $ticket
+    ): TicketResource {
 
-    $ticket->load([
-        'user',
-        'category',
-        'priority',
-        'status',
-        'assignedUser',
-    ]);
+        Gate::authorize(
+            'view',
+            $ticket
+        );
 
-    return new TicketResource($ticket);
-}
+        $ticket->load([
+            'user',
+            'category',
+            'priority',
+            'status',
+            'assignedUser',
+        ]);
 
-    public function update( UpdateTicketRequest $request,Ticket $ticket,TicketHistoryService $historyService): TicketResource 
-    
-    {
-    Gate::authorize('update', $ticket);
+        return new TicketResource($ticket);
+    }
 
-    $changes = $request->validated();
+    /**
+     * Actualizar un ticket.
+     */
+    public function update(
+        UpdateTicketRequest $request,
+        Ticket $ticket,
+        TicketHistoryService $historyService
+    ): TicketResource {
 
-    foreach ($changes as $field => $newValue) {
+        Gate::authorize(
+            'update',
+            $ticket
+        );
 
-        $oldValue = $ticket->getAttribute($field);
+        $changes = $request->validated();
 
-        if ((string) $oldValue === (string) $newValue) {
-            continue;
+        /*
+        |--------------------------------------------------------------------------
+        | Registrar cambios
+        |--------------------------------------------------------------------------
+        */
+
+        foreach ($changes as $field => $newValue) {
+
+            $oldValue = $ticket->getAttribute(
+                $field
+            );
+
+            if ((string) $oldValue === (string) $newValue) {
+                continue;
+            }
+
+            $ticket->setAttribute(
+                $field,
+                $newValue
+            );
+
+            $historyService->log(
+                $ticket,
+                $request->user(),
+                'updated',
+                $field,
+                $oldValue,
+                $newValue,
+                "Se actualizó el campo {$field}."
+            );
         }
 
-        $ticket->setAttribute($field, $newValue);
+        /*
+        |--------------------------------------------------------------------------
+        | Guardar cambios
+        |--------------------------------------------------------------------------
+        */
+
+        $ticket->save();
+
+        /*
+        |--------------------------------------------------------------------------
+        | Recargar relaciones
+        |--------------------------------------------------------------------------
+        */
+
+        $ticket->load([
+            'user',
+            'category',
+            'priority',
+            'status',
+            'assignedUser',
+        ]);
+
+        return new TicketResource($ticket);
+    }
+
+    /**
+     * Eliminar un ticket.
+     */
+    public function destroy(
+        Ticket $ticket,
+        TicketHistoryService $historyService,
+        Request $request
+    ): JsonResponse {
+
+        Gate::authorize(
+            'delete',
+            $ticket
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Registrar eliminación
+        |--------------------------------------------------------------------------
+        */
 
         $historyService->log(
             $ticket,
             $request->user(),
-            'updated',
-            $field,
-            $oldValue,
-            $newValue,
-            "Se actualizó el campo {$field}."
+            'deleted',
+            null,
+            null,
+            null,
+            'Ticket eliminado.'
         );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Soft Delete
+        |--------------------------------------------------------------------------
+        */
+
+        $ticket->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Ticket eliminado correctamente.',
+        ]);
     }
 
-    $ticket->save();
+    /**
+     * Cambiar estado de un ticket.
+     */
+    public function changeStatus(
+        ChangeTicketStatusRequest $request,
+        Ticket $ticket,
+        TicketStatusService $statusService,
+        TicketHistoryService $historyService
+    ): TicketResource {
 
-    $ticket->load([
-        'user',
-        'category',
-        'priority',
-        'status',
-        'assignedUser',
-    ]);
+        Gate::authorize(
+            'update',
+            $ticket
+        );
 
-    return new TicketResource($ticket);
-}
+        $ticket = $statusService->changeStatus(
+            $ticket,
+            $request->status,
+            $request->user(),
+            $historyService
+        );
 
-    public function destroy(Ticket $ticket,TicketHistoryService $historyService,Request $request): JsonResponse 
-    
-    {
+        return new TicketResource($ticket);
+    }
 
-    Gate::authorize('delete', $ticket);
+    /**
+     * Mostrar historial de un ticket.
+     */
+    public function history(
+        Ticket $ticket
+    ): AnonymousResourceCollection {
 
-    $historyService->log(
-        $ticket,
-        $request->user(),
-        'deleted',
-        null,
-        null,
-        null,
-        'Ticket eliminado.'
-    );
+        Gate::authorize(
+            'view',
+            $ticket
+        );
 
-    $ticket->delete();
+        $history = $ticket->history()
+            ->with('user')
+            ->latest()
+            ->get();
 
-    return response()->json([
-        'success' => true,
-        'message' => 'Ticket eliminado correctamente.',
-    ]);
-}
-
-public function changeStatus(
-    ChangeTicketStatusRequest $request,
-    Ticket $ticket,
-    TicketStatusService $statusService,
-    TicketHistoryService $historyService
-): TicketResource {
-
-    Gate::authorize('update', $ticket);
-
-    $ticket = $statusService->changeStatus(
-        $ticket,
-        $request->status,
-        $request->user(),
-        $historyService
-    );
-
-    return new TicketResource($ticket);
-}
-
-public function history(Ticket $ticket): AnonymousResourceCollection
-{
-    Gate::authorize('delete', $ticket);
-
-    $history = $ticket->history()
-        ->with('user')
-        ->latest()
-        ->get();
-
-    return TicketHistoryResource::collection($history);
-}
+        return TicketHistoryResource::collection(
+            $history
+        );
+    }
 }

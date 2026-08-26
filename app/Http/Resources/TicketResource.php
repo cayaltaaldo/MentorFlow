@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use App\Services\TicketSlaService;
 
 class TicketResource extends JsonResource
 {
@@ -56,6 +57,13 @@ class TicketResource extends JsonResource
                     'email' => $this->assignedUser->email,
                 ] : null;
             }),
+
+            'sla' => [
+                'due_at' => $this->due_at?->toISOString(),
+
+                'status' => app(TicketSlaService::class)
+                    ->getStatus($this->resource),
+            ],
 
             'due_at' => $this->due_at?->toISOString(),
 

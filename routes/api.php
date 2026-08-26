@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\TicketController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\TicketDashboardController;
 
 Route::get('/test', function () {
     return response()->json([
@@ -41,5 +42,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/tickets/{ticket}/history',[TicketController::class, 'history'])
         ->middleware('permission:tickets.view');    
+
+    Route::get('/dashboard/tickets',[TicketDashboardController::class, 'index'])
+        ->middleware('permission:tickets.view_all');    
     });
 

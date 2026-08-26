@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Models\Ticket;
-use App\Models\TicketHistory;
+use App\Models\TicketStatus;
 use App\Models\User;
 use Illuminate\Validation\ValidationException;
 
@@ -55,8 +55,7 @@ class TicketStatusService
             ]);
         }
 
-        $allowedTransitions =
-            $this->transitions[$currentStatus] ?? [];
+        $allowedTransitions = $this->transitions[$currentStatus] ?? [];
 
         if (!in_array($newStatus, $allowedTransitions, true)) {
             throw ValidationException::withMessages([
@@ -64,7 +63,7 @@ class TicketStatusService
             ]);
         }
 
-        $statusId = \App\Models\TicketStatus::where(
+        $statusId = TicketStatus::where(
             'slug',
             $newStatus
         )->value('id');
@@ -75,11 +74,21 @@ class TicketStatusService
             ]);
         }
 
-        $oldStatus = $ticket->status->slug;
+        $oldStatus = $currentStatus;
 
-        $ticket->update([
+        $updateData = [
             'status_id' => $statusId,
-        ]);
+        ];
+
+        if ($newStatus === 'resolved') {
+            $updateData['resolved_at'] = now();
+        }
+
+        if ($newStatus === 'closed') {
+            $updateData['closed_at'] = now();
+        }
+
+        $ticket->update($updateData);
 
         $historyService->log(
             $ticket,
