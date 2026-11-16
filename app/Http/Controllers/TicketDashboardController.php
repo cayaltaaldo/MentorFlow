@@ -11,57 +11,74 @@ class TicketDashboardController extends Controller
     public function index(
         TicketSlaService $slaService
     ): JsonResponse {
-
         $tickets = Ticket::with([
             'status',
             'priority',
         ])->get();
 
-        $total = $tickets->count();
+        $activeStatuses = [
+            'open',
+            'waiting',
+            'assigned',
+            'in-progress',
+        ];
 
-        $open = $tickets->filter(
-            fn ($ticket) =>
-                in_array(
-                    $ticket->status?->slug,
-                    ['open', 'assigned', 'in_progress', 'waiting']
-                )
-        )->count();
+        $resolvedStatuses = [
+            'resolved',
+            'closed',
+        ];
 
-        $resolved = $tickets->filter(
-            fn ($ticket) =>
-                in_array(
-                    $ticket->status?->slug,
-                    ['resolved', 'closed']
-                )
-        )->count();
+        $activeTickets = $tickets->filter(
+            fn ($ticket) => in_array(
+                $ticket->status?->slug,
+                $activeStatuses,
+                true
+            )
+        );
 
-        $breached = $tickets->filter(
-            fn ($ticket) =>
-                $slaService->getStatus($ticket) === 'breached'
-        )->count();
+        $resolvedTickets = $tickets->filter(
+            fn ($ticket) => in_array(
+                $ticket->status?->slug,
+                $resolvedStatuses,
+                true
+            )
+        );
 
-        $onTrack = $tickets->filter(
+        $cancelledTickets = $tickets->filter(
             fn ($ticket) =>
-                $slaService->getStatus($ticket) === 'on_track'
-        )->count();
+                $ticket->status?->slug === 'cancelled'
+        );
 
-        $atRisk = $tickets->filter(
-            fn ($ticket) =>
-                $slaService->getStatus($ticket) === 'at_risk'
-        )->count();
+        // SLA operativo: únicamente tickets activos.
+        $activeSla = $activeTickets->countBy(
+            fn ($ticket) => $slaService->getStatus($ticket)
+        );
+
+        // SLA histórico: tickets resueltos o cerrados.
+        // El servicio utiliza resolved_at para comprobar
+        // si la resolución ocurrió dentro del plazo.
+        $resolvedSla = $resolvedTickets->countBy(
+            fn ($ticket) => $slaService->getStatus($ticket)
+        );
 
         return response()->json([
             'data' => [
-                'total_tickets' => $total,
-
-                'open_tickets' => $open,
-
-                'resolved_tickets' => $resolved,
+                'total_tickets' => $tickets->count(),
+                'open_tickets' => $activeTickets->count(),
+                'resolved_tickets' => $resolvedTickets->count(),
+                'cancelled_tickets' => $cancelledTickets->count(),
 
                 'sla' => [
-                    'on_track' => $onTrack,
-                    'at_risk' => $atRisk,
-                    'breached' => $breached,
+                    'on_track' => $activeSla->get('on_track', 0),
+                    'at_risk' => $activeSla->get('at_risk', 0),
+                    'breached' => $activeSla->get('breached', 0),
+                    'unknown' => $activeSla->get('unknown', 0),
+                ],
+
+                'historical_sla' => [
+                    'met' => $resolvedSla->get('met', 0),
+                    'breached' => $resolvedSla->get('breached', 0),
+                    'unknown' => $resolvedSla->get('unknown', 0),
                 ],
             ],
         ]);

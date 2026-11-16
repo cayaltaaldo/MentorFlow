@@ -1,0 +1,262 @@
+import Link from "next/link";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+
+import Sidebar from "@/components/layout/sidebar";
+import TicketsFilters from "@/features/tickets/tickets-filters";
+import TicketsTable from "@/features/tickets/tickets-table";
+
+import {
+  laravelApi,
+  LaravelApiError,
+} from "@/lib/laravel-api";
+
+import type {
+  AuthUser,
+  CurrentUserResponse,
+} from "@/types/auth";
+
+import type { TicketsResponse } from "@/types/ticket";
+
+export const dynamic = "force-dynamic";
+
+type SearchParams = {
+  search?: string | string[];
+  status?: string | string[];
+  sort?: string | string[];
+  page?: string | string[];
+};
+
+type TicketsPageProps = {
+  searchParams: Promise<SearchParams>;
+};
+
+function singleValue(
+  value: string | string[] | undefined,
+  fallback = ""
+): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+const validStatuses = new Set([
+  "",
+  "open",
+  "waiting",
+  "assigned",
+  "in-progress",
+  "resolved",
+  "closed",
+  "cancelled",
+]);
+
+const validSorts = new Set([
+  "created_at",
+  "-created_at",
+  "updated_at",
+  "-updated_at",
+  "due_at",
+  "-due_at",
+]);
+
+function pageUrl(
+  page: number,
+  search: string,
+  status: string,
+  sort: string
+) {
+  const params = new URLSearchParams();
+
+  if (search) params.set("search", search);
+  if (status) params.set("status", status);
+
+  params.set("sort", sort);
+  params.set("page", String(page));
+
+  return `/tickets?${params.toString()}`;
+}
+
+export default async function TicketsPage({
+  searchParams,
+}: TicketsPageProps) {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("mentorflow_session")?.value;
+
+  if (!token) {
+    redirect("/login");
+  }
+
+  let user: AuthUser;
+
+  try {
+    const response = await laravelApi<CurrentUserResponse>(
+      "/user",
+      {},
+      token
+    );
+
+    user = response.data.user;
+  } catch (error) {
+    if (
+      error instanceof LaravelApiError &&
+      (error.status === 401 || error.status === 403)
+    ) {
+      redirect("/login");
+    }
+
+    throw error;
+  }
+
+  const params = await searchParams;
+
+  const search = singleValue(params.search).slice(0, 100);
+
+  const requestedStatus = singleValue(params.status);
+  const status = validStatuses.has(requestedStatus)
+    ? requestedStatus
+    : "";
+
+  const requestedSort = singleValue(
+    params.sort,
+    "-created_at"
+  );
+
+  const sort = validSorts.has(requestedSort)
+    ? requestedSort
+    : "-created_at";
+
+  const requestedPage = singleValue(params.page, "1");
+  const parsedPage = Number(requestedPage);
+
+  const page =
+    Number.isSafeInteger(parsedPage) && parsedPage > 0
+      ? parsedPage
+      : 1;
+
+  const query = new URLSearchParams({
+    page: String(page),
+    per_page: "15",
+    sort,
+  });
+
+  if (search) query.set("search", search);
+  if (status) query.set("status", status);
+
+  let result: TicketsResponse | null = null;
+  let errorMessage: string | null = null;
+
+  try {
+    result = await laravelApi<TicketsResponse>(
+      `/tickets?${query.toString()}`,
+      {},
+      token
+    );
+  } catch (error) {
+    if (error instanceof LaravelApiError) {
+      errorMessage =
+        error.status === 403
+          ? "No tienes permiso para consultar los tickets."
+          : error.message;
+    } else {
+      errorMessage = "No se pudieron cargar los tickets.";
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <Sidebar user={user} />
+
+      <main className="min-h-screen p-5 md:ml-64 md:p-10">
+        <div className="mx-auto max-w-7xl space-y-6">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">
+              Gestión de tickets
+            </h1>
+
+            <p className="mt-2 text-sm text-slate-500">
+              Consulta las incidencias registradas en MentorFlow.
+            </p>
+          </div>
+
+          <TicketsFilters
+            search={search}
+            status={status}
+            sort={sort}
+          />
+
+          {errorMessage && (
+            <div
+              role="alert"
+              className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+            >
+              {errorMessage}
+            </div>
+          )}
+
+          {result && (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm text-slate-600">
+                  <span className="font-semibold text-slate-900">
+                    {result.meta.total}
+                  </span>{" "}
+                  tickets encontrados
+                </p>
+
+                <p className="text-sm text-slate-500">
+                  Página {result.meta.current_page} de{" "}
+                  {result.meta.last_page}
+                </p>
+              </div>
+
+              <TicketsTable tickets={result.data} />
+
+              <div className="flex items-center justify-between gap-3">
+                {result.meta.current_page > 1 ? (
+                  <Link
+                    href={pageUrl(
+                      result.meta.current_page - 1,
+                      search,
+                      status,
+                      sort
+                    )}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                  >
+                    Anterior
+                  </Link>
+                ) : (
+                  <span className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-400">
+                    Anterior
+                  </span>
+                )}
+
+                <span className="text-sm text-slate-500">
+                  {result.meta.current_page} /{" "}
+                  {result.meta.last_page}
+                </span>
+
+                {result.meta.current_page <
+                result.meta.last_page ? (
+                  <Link
+                    href={pageUrl(
+                      result.meta.current_page + 1,
+                      search,
+                      status,
+                      sort
+                    )}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                  >
+                    Siguiente
+                  </Link>
+                ) : (
+                  <span className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-400">
+                    Siguiente
+                  </span>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
