@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreTicketRequest extends FormRequest
 {
@@ -17,13 +18,15 @@ class StoreTicketRequest extends FormRequest
             'category_id' => [
                 'required',
                 'integer',
-                'exists:ticket_categories,id',
+                Rule::exists('ticket_categories', 'id')
+                    ->where('is_active', true),
             ],
 
             'priority_id' => [
                 'required',
                 'integer',
-                'exists:ticket_priorities,id',
+                Rule::exists('ticket_priorities', 'id')
+                    ->where('is_active', true),
             ],
 
             'title' => [

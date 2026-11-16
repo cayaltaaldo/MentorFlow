@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { Ticket } from "lucide-react";
+import { Plus, Ticket } from "lucide-react";
 
 import TicketsFilters from "@/features/tickets/tickets-filters";
 import TicketsTable from "@/features/tickets/tickets-table";
@@ -137,6 +137,7 @@ export default async function TicketsPage({
 
   return (
     <div className="space-y-7">
+      {/* Encabezado */}
       <section className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-slate-900">
@@ -149,12 +150,23 @@ export default async function TicketsPage({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700">
-          <Ticket size={18} />
-          Gestión de incidencias
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700">
+            <Ticket size={18} />
+            Gestión de incidencias
+          </div>
+
+          <Link
+            href="/tickets/new"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+          >
+            <Plus size={18} />
+            Nuevo ticket
+          </Link>
         </div>
       </section>
 
+      {/* Filtros */}
       <section>
         <TicketsFilters
           search={search}
@@ -163,6 +175,7 @@ export default async function TicketsPage({
         />
       </section>
 
+      {/* Errores */}
       {errorMessage && (
         <div
           role="alert"
@@ -172,6 +185,7 @@ export default async function TicketsPage({
         </div>
       )}
 
+      {/* Listado */}
       {result && (
         <section className="space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -194,6 +208,7 @@ export default async function TicketsPage({
             </div>
           </div>
 
+          {/* Paginación */}
           <div className="flex items-center justify-between gap-3">
             {result.meta.current_page > 1 ? (
               <Link
