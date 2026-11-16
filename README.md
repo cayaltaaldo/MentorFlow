@@ -195,9 +195,33 @@ http://localhost:3000
 
 Los endpoints protegidos requieren autenticación y los permisos correspondientes.
 
+
 ## Capturas de pantalla
 
-Pendiente de incorporar capturas del inicio de sesión, dashboard, listado, creación y detalle de tickets.
+### Inicio de sesión
+Autenticación de usuarios para acceder a las funcionalidades del sistema.
+
+![Inicio de sesión de MentorFlow](docs/screenshots/01-login.png)
+
+### Dashboard
+Panel principal con indicadores y resumen de incidencias.
+
+![Dashboard de MentorFlow](docs/screenshots/02-dashboard.png)
+
+### Gestión de tickets
+Listado de incidencias con opciones de búsqueda, filtros y paginación.
+
+![Listado de tickets](docs/screenshots/03-tickets.png)
+
+### Registro de incidencias
+Formulario para crear tickets, seleccionar categorías y establecer prioridades.
+
+![Formulario de creación de tickets](docs/screenshots/04-create-ticket.png)
+
+### Detalle e historial
+Consulta de la información del ticket y seguimiento de sus cambios.
+
+![Detalle e historial de tickets](docs/screenshots/05-ticket-detail.png)
 
 ## Estado del proyecto
 
