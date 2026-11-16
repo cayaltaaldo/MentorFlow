@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import type { Ticket } from "@/types/ticket";
 
 type TicketsTableProps = {
@@ -22,8 +24,10 @@ const slaLabels: Record<string, string> = {
   unknown: "Sin fecha",
 };
 
-function formatDate(value: string | null) {
-  if (!value) return "—";
+function formatDate(value: string | null): string {
+  if (!value) {
+    return "—";
+  }
 
   const date = new Date(value);
 
@@ -37,6 +41,23 @@ function formatDate(value: string | null) {
     year: "numeric",
     timeZone: "America/Lima",
   }).format(date);
+}
+
+function getSlaStyle(status: string): string {
+  switch (status) {
+    case "breached":
+      return "font-medium text-red-600";
+
+    case "met":
+    case "on_track":
+      return "font-medium text-emerald-600";
+
+    case "at_risk":
+      return "font-medium text-amber-600";
+
+    default:
+      return "text-slate-600";
+  }
 }
 
 export default function TicketsTable({
@@ -61,73 +82,110 @@ export default function TicketsTable({
       <table className="w-full min-w-[900px] text-left text-sm">
         <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
           <tr>
-            <th className="px-5 py-4">Ticket</th>
-            <th className="px-5 py-4">Solicitante</th>
-            <th className="px-5 py-4">Estado</th>
-            <th className="px-5 py-4">Prioridad</th>
-            <th className="px-5 py-4">SLA</th>
-            <th className="px-5 py-4">Creado</th>
+            <th scope="col" className="px-5 py-4">
+              Ticket
+            </th>
+
+            <th scope="col" className="px-5 py-4">
+              Solicitante
+            </th>
+
+            <th scope="col" className="px-5 py-4">
+              Estado
+            </th>
+
+            <th scope="col" className="px-5 py-4">
+              Prioridad
+            </th>
+
+            <th scope="col" className="px-5 py-4">
+              SLA
+            </th>
+
+            <th scope="col" className="px-5 py-4">
+              Creado
+            </th>
           </tr>
         </thead>
 
         <tbody className="divide-y divide-slate-100">
-          {tickets.map((ticket) => (
-            <tr
-              key={ticket.id}
-              className="hover:bg-slate-50"
-            >
-              <td className="px-5 py-4">
-                <p className="font-semibold text-blue-700">
-                  {ticket.ticket_number}
-                </p>
+          {tickets.map((ticket) => {
+            const ticketUrl = `/tickets/${ticket.id}`;
 
-                <p className="mt-1 max-w-64 truncate font-medium text-slate-900">
-                  {ticket.title}
-                </p>
+            const slaStatus =
+              ticket.sla?.status ?? "unknown";
 
-                <p className="mt-1 text-xs text-slate-500">
-                  {ticket.category?.name ?? "Sin categoría"}
-                </p>
-              </td>
+            return (
+              <tr
+                key={ticket.id}
+                className="transition-colors hover:bg-slate-50"
+              >
+                {/* TICKET */}
 
-              <td className="px-5 py-4 text-slate-700">
-                {ticket.user?.name ?? "Sin usuario"}
-              </td>
+                <td className="px-5 py-4">
+                  <Link
+                    href={ticketUrl}
+                    className="inline-block font-semibold text-blue-700 transition-colors hover:text-blue-900 hover:underline focus-visible:rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                  >
+                    {ticket.ticket_number}
+                  </Link>
 
-              <td className="px-5 py-4">
-                <span className="inline-block rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-                  {ticket.status
-                    ? statusLabels[ticket.status.slug] ??
-                      ticket.status.name
-                    : "Sin estado"}
-                </span>
-              </td>
+                  <div className="mt-1 max-w-64">
+                    <Link
+                      href={ticketUrl}
+                      className="block truncate font-medium text-slate-900 transition-colors hover:text-blue-700 hover:underline"
+                      title={ticket.title}
+                    >
+                      {ticket.title}
+                    </Link>
+                  </div>
 
-              <td className="px-5 py-4 text-slate-700">
-                {ticket.priority?.name ?? "Sin prioridad"}
-              </td>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {ticket.category?.name ??
+                      "Sin categoría"}
+                  </p>
+                </td>
 
-              <td className="px-5 py-4">
-                <span
-                  className={
-                    ticket.sla.status === "breached"
-                      ? "font-medium text-red-600"
-                      : ticket.sla.status === "met" ||
-                          ticket.sla.status === "on_track"
-                        ? "font-medium text-emerald-600"
-                        : "text-slate-600"
-                  }
-                >
-                  {slaLabels[ticket.sla.status] ??
-                    ticket.sla.status}
-                </span>
-              </td>
+                {/* SOLICITANTE */}
 
-              <td className="px-5 py-4 text-slate-600">
-                {formatDate(ticket.created_at)}
-              </td>
-            </tr>
-          ))}
+                <td className="px-5 py-4 text-slate-700">
+                  {ticket.user?.name ?? "Sin usuario"}
+                </td>
+
+                {/* ESTADO */}
+
+                <td className="px-5 py-4">
+                  <span className="inline-block rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                    {ticket.status
+                      ? statusLabels[ticket.status.slug] ??
+                        ticket.status.name
+                      : "Sin estado"}
+                  </span>
+                </td>
+
+                {/* PRIORIDAD */}
+
+                <td className="px-5 py-4 text-slate-700">
+                  {ticket.priority?.name ??
+                    "Sin prioridad"}
+                </td>
+
+                {/* SLA */}
+
+                <td className="px-5 py-4">
+                  <span className={getSlaStyle(slaStatus)}>
+                    {slaLabels[slaStatus] ?? slaStatus}
+                  </span>
+                </td>
+
+                {/* FECHA DE CREACIÓN */}
+
+                <td className="px-5 py-4 text-slate-600">
+                  {formatDate(ticket.created_at)}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
